@@ -1,5 +1,9 @@
 # smiles
 
+## Dependencies
+
+* OpenCV
+
 ## Compiling
 
 ```

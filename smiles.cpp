@@ -69,13 +69,10 @@ int main(int argc, const char *argv[]) {
     // Check for valid command line arguments, print usage
     // if no arguments were given.
     if (argc < 2) {
-        cout << "usage: " << argv[0] << " <csv.ext> <output_folder> " << endl;
+        cout << "usage: " << argv[0] << " <csv.ext>" << endl;
         exit(1);
     }
-    string output_folder = ".";
-    if (argc == 3) {
-        output_folder = string(argv[2]);
-    }
+
     // Get the path to your CSV.
     string fn_csv = string(argv[1]);
     // These vectors hold the images and corresponding labels.
@@ -99,15 +96,7 @@ int main(int argc, const char *argv[]) {
     // later in code to reshape the images to their original
     // size:
     int height = images[0].rows;
-    // The following lines simply get the last images from
-    // your dataset and remove it from the vector. This is
-    // done, so that the training data (which we learn the
-    // cv::BasicFaceRecognizer on) and the test data we test
-    // the model with, do not overlap.
-    Mat testSample = images[images.size() - 1];
-    int testLabel = labels[labels.size() - 1];
-    images.pop_back();
-    labels.pop_back();
+
     // The following lines create an Fisherfaces model for
     // face recognition and train it with the images and
     // labels read from the given CSV file.
@@ -128,66 +117,42 @@ int main(int argc, const char *argv[]) {
     //
     Ptr<BasicFaceRecognizer> model = createFisherFaceRecognizer();
     model->train(images, labels);
-    // The following line predicts the label of a given
-    // test image:
-    int predictedLabel = model->predict(testSample);
-    //
-    // To get the confidence of a prediction call the model with:
-    //
-    //      int predictedLabel = -1;
-    //      double confidence = 0.0;
-    //      model->predict(testSample, predictedLabel, confidence);
-    //
-    string result_message = format("Predicted class = %d / Actual class = %d.", predictedLabel, testLabel);
-    cout << result_message << endl;
-    // Here is how to get the eigenvalues of this Eigenfaces model:
-    Mat eigenvalues = model->getEigenValues();
-    // And we can do the same to display the Eigenvectors (read Eigenfaces):
-    Mat W = model->getEigenVectors();
-    // Get the sample mean from the training data
-    Mat mean = model->getMean();
-    // Display or save:
-    if(argc == 2) {
-        imshow("mean", norm_0_255(mean.reshape(1, images[0].rows)));
-    } else {
-        imwrite(format("%s/mean.png", output_folder.c_str()), norm_0_255(mean.reshape(1, images[0].rows)));
+
+    // Predicting
+    cv::VideoCapture cap;
+    int camera_index = 0;
+    if (!cap.open(camera_index)) {
+        std::cerr << "Unable to open camera " << camera_index << std::endl;
+        exit(1);
     }
-    // Display or save the first, at most 16 Fisherfaces:
-    for (int i = 0; i < min(16, W.cols); i++) {
-        string msg = format("Eigenvalue #%d = %.5f", i, eigenvalues.at<double>(i));
-        cout << msg << endl;
-        // get eigenvector #i
-        Mat ev = W.col(i).clone();
-        // Reshape to original size & normalize to [0...255] for imshow.
-        Mat grayscale = norm_0_255(ev.reshape(1, height));
-        // Show the image & apply a Bone colormap for better sensing.
-        Mat cgrayscale;
-        applyColorMap(grayscale, cgrayscale, COLORMAP_BONE);
-        // Display or save:
-        if(argc == 2) {
-            imshow(format("fisherface_%d", i), cgrayscale);
-        } else {
-            imwrite(format("%s/fisherface_%d.png", output_folder.c_str(), i), norm_0_255(cgrayscale));
-        }
-    }
-    // Display or save the image reconstruction at some predefined steps:
-    for(int num_component = 0; num_component < min(16, W.cols); num_component++) {
-        // Slice the Fisherface from the model:
-        Mat ev = W.col(num_component);
-        Mat projection = LDA::subspaceProject(ev, mean, images[0].reshape(1,1));
-        Mat reconstruction = LDA::subspaceReconstruct(ev, mean, projection);
-        // Normalize the result:
-        reconstruction = norm_0_255(reconstruction.reshape(1, images[0].rows));
-        // Display or save:
-        if(argc == 2) {
-            imshow(format("fisherface_reconstruction_%d", num_component), reconstruction);
-        } else {
-            imwrite(format("%s/fisherface_reconstruction_%d.png", output_folder.c_str(), num_component), reconstruction);
-        }
-    }
-    // Display if we are not writing to an output folder:
-    if(argc == 2) {
-        waitKey(0);
+
+    cv::Size size = images[0].size();
+    cv::Mat frame;
+
+    cap >> frame;
+    // Crop to square
+    int side = std::min(frame.rows, frame.cols);
+    int dx = (frame.cols - side) / 2;
+    int dy = (frame.rows - side) / 2;
+    cv::Rect region(dx, dy, side, side);
+
+    cv::Mat frame_square;
+    cv::Mat frame_gray;
+    cv::Mat frame_resized;
+
+
+    while (true) {
+        cap >> frame;
+        if(frame.empty()) break; // end of video stream
+        frame_square = frame(region);
+        cv::cvtColor(frame_square, frame_gray, CV_BGR2GRAY);
+        cv::resize(frame_gray, frame_resized, size);
+        int predictedLabel = model->predict(frame_resized);
+        std::cout << "Predicted " << predictedLabel << std::endl;
+        cv::imshow("Camera", frame_resized);
+        cv::imshow("Camera1", frame);
+        cv::imshow("Camera2", frame_square);
+        if(cv::waitKey(1) == 27) break; // stop capturing by pressing ESC
     }
     return 0;
 }
