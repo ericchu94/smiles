@@ -1,0 +1,8 @@
+# smiles
+
+## Compiling
+
+```
+cmake .
+make
+```
