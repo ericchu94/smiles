@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 2.8)
+project( smiles )
+find_package( OpenCV REQUIRED )
+add_executable( smiles smiles.cpp )
+target_link_libraries( smiles ${OpenCV_LIBS} )
